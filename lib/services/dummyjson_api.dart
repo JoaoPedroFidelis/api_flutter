@@ -86,52 +86,40 @@ class DummyJsonApi {
   }
 
   /// Obtém os últimos N usuários (ordem por id desc se disponível).
-  Future<List<User>> getLatestUsers({int limit = 10}) async {
+  List<User> globalUser = [];
+  Future<List<User>> getLatestUsers({int limit = 10, String ?email, String ?name, String ?gender, String ?orderRecord, String ?orderType}) async {
     final uri = Uri.parse(
-        '$baseUrl/users?limit=$limit&sortBy=id&order=desc&select=id,firstName,lastName,username,email,image');
+        '$baseUrl/users?limit=$limit&sortBy=$orderRecord&order=$orderType&select=id,firstName,lastName,username,email,gender,image');
     var res = await _getWithRetry(uri);
-
-    if (res.statusCode != 200) {
-      // fallback simples sem sortBy/order
-      final fallback = Uri.parse(
-          '$baseUrl/users?limit=$limit&select=id,firstName,lastName,username,email,image');
-      res = await _getWithRetry(fallback);
-      if (res.statusCode != 200) {
-        throw Exception('Erro ao buscar users: ${res.statusCode} ${res.body}');
-      }
-      final map = jsonDecode(res.body) as Map<String, dynamic>;
-      final list = (map['users'] as List).cast<Map<String, dynamic>>();
-      list.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
-      return list.map(User.fromJson).toList();
-    }
 
     final map = jsonDecode(res.body) as Map<String, dynamic>;
     final list = (map['users'] as List).cast<Map<String, dynamic>>();
-    return list.map(User.fromJson).toList();
+    var users = list.map(User.fromJson).toList();
+
+    if (name != null && name.trim().isNotEmpty) {
+      users = users .where((u) => u.fullName.toLowerCase().startsWith(name.toLowerCase())).toList();
+    }
+    if (email != null && email.trim().isNotEmpty) {
+      users = users .where((u) => u.email.toLowerCase().contains(email.toLowerCase())) .toList();
+    }
+    if (gender != null && gender.trim().isNotEmpty && gender.toLowerCase() != 'all') {
+      users = users .where((u) => u.gender.toLowerCase() == gender.toLowerCase()) .toList();
+    }
+    globalUser = users;
+    return users;
   }
 
   /// Obtém os últimos N carrinhos.
   /// Se sortBy/order não estiver disponível, ordena localmente por id desc.
-  Future<List<Cart>> getLatestCarts({int limit = 10}) async {
+  Future<List<Cart>> getLatestCarts() async {
     final trySorted =
-        Uri.parse('$baseUrl/carts?limit=$limit&sortBy=id&order=desc');
+        Uri.parse('$baseUrl/carts?limit=999&sortBy=id&order=desc');
     var res = await _getWithRetry(trySorted);
-
-    if (res.statusCode != 200) {
-      // fallback sem sort, depois ordena localmente
-      final fallback = Uri.parse('$baseUrl/carts?limit=$limit');
-      res = await _getWithRetry(fallback);
-      if (res.statusCode != 200) {
-        throw Exception('Erro ao buscar carts: ${res.statusCode} ${res.body}');
-      }
-      final map = jsonDecode(res.body) as Map<String, dynamic>;
-      final list = (map['carts'] as List).cast<Map<String, dynamic>>();
-      list.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
-      return list.map(Cart.fromJson).toList();
-    }
 
     final map = jsonDecode(res.body) as Map<String, dynamic>;
     final list = (map['carts'] as List).cast<Map<String, dynamic>>();
-    return list.map(Cart.fromJson).toList();
+    List<Cart> carts = list.map(Cart.fromJson).toList();
+    carts = carts.where((c) => globalUser.any((u) => u.id == c.userId)).toList();
+    return carts;
   }
 }

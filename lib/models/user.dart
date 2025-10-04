@@ -4,6 +4,7 @@ class User {
   final String lastName;
   final String username;
   final String email;
+  final String gender;
   final String? image;
 
   User({
@@ -12,7 +13,8 @@ class User {
     required this.lastName,
     required this.username,
     required this.email,
-    this.image,
+    required this.gender,
+    this.image
   });
 
   String get fullName => '$firstName $lastName';
@@ -24,6 +26,7 @@ class User {
       lastName: json['lastName'] as String? ?? '',
       username: json['username'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      gender: json['gender'] as String? ?? '',
       image: json['image'] as String?,
     );
   }

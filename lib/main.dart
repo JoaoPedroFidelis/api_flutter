@@ -143,11 +143,24 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _qtyCtrl = TextEditingController(text: '10');
   bool _loading = false;
   String? _error;
   List<User> _users = const [];
   List<Cart> _carts = const [];
+
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  String? _genderFilter = 'all';
+  String? _orderRecord = 'id';
+  String? _orderType = 'desc';
+  int _qtd = 10;
+
+  Future<void> _setLimit(q) async {
+    setState(() async {
+      _qtd = q;
+      await _fetch();
+    });
+  }
 
   Future<void> _fetch() async {
     setState(() {
@@ -155,14 +168,34 @@ class _HomePageState extends State<HomePage> {
       _error = null;
     });
     try {
-      final n = int.tryParse(_qtyCtrl.text.trim()) ?? 10;
+      final name = _nameCtrl.text.trim();
+      final email = _emailCtrl.text.trim();
+
       final results = await Future.wait([
-        widget.api.getLatestUsers(limit: n),
-        widget.api.getLatestCarts(limit: n),
+        widget.api.getLatestUsers(limit: _qtd, name: name, email: email, gender: _genderFilter, orderRecord: _orderRecord, orderType: _orderType),
+        widget.api.getLatestCarts(),
       ]);
       setState(() {
         _users = results[0] as List<User>;
         _carts = results[1] as List<Cart>;
+
+        if(_users.length == 0){
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text("Aviso"),
+                content: const Text("Nenhum dado encontrado com os filtros usados..."),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text("Ok"),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       });
     } catch (e) {
       setState(() => _error = e.toString());
@@ -245,23 +278,93 @@ class _HomePageState extends State<HomePage> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+              TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: 'Nome'),
+              ),
+              TextField(
+                controller: _emailCtrl,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _genderFilter,
+                decoration: const InputDecoration(labelText: 'Gênero'),
+                hint: const Text('Gênero'),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('Todos')),
+                  DropdownMenuItem(value: 'male', child: Text('Masculino')),
+                  DropdownMenuItem(value: 'female', child: Text('Feminino')),
+                ],
+                onChanged: (v) => setState(() => _genderFilter = v),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _orderRecord,
+                decoration: const InputDecoration(labelText: 'Ordem'),
+                hint: const Text('Ordem por Campo'),
+                items: const [
+                  DropdownMenuItem(value: 'id', child: Text('ID')),
+                  DropdownMenuItem(value: 'firstName', child: Text('Nome')),
+                  DropdownMenuItem(value: 'lastName', child: Text('Sobrenome')),
+                  DropdownMenuItem(value: 'username', child: Text('Nome de Usuario')),
+                  DropdownMenuItem(value: 'email', child: Text('Email')),
+                ],
+                onChanged: (v) => setState(() => _orderRecord = v),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _orderType,
+                // decoration: const InputDecoration(labelText: 'Ordem'),
+                hint: const Text('Estilo de Ordem'),
+                items: const [
+                  DropdownMenuItem(value: 'desc', child: Text('Decrescente')),
+                  DropdownMenuItem(value: 'asc', child: Text('Crescente')),
+                ],
+                onChanged: (v) => setState(() => _orderType = v),
+              ),
+            ],
+          ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _qtyCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Quantidade (N)',
-                      hintText: 'Ex.: 10',
-                      prefixIcon: Icon(Icons.filter_1),
-                    ),
-                    onSubmitted: (_) => _fetch(),
+                Text('Quantidade de dados'),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _qtd == 10 ? Colors.indigo : null,
+                    foregroundColor: _qtd == 10 ? Colors.white : null,
                   ),
+                  onPressed: () => _setLimit(10),
+                  label: const Text('10'),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
+                const SizedBox(width: 5),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _qtd == 20 ? Colors.indigo : null,
+                    foregroundColor: _qtd == 20 ? Colors.white : null,
+                  ),
+                  onPressed: () => _setLimit(20),
+                  label: const Text('20'),
+                ),
+                const SizedBox(width: 5),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _qtd == 50 ? Colors.indigo : null,
+                    foregroundColor: _qtd == 50 ? Colors.white : null,
+                  ),
+                  onPressed: () => _setLimit(50),
+                  label: const Text('50'),
+                ),
+                const SizedBox(width: 5),
+                Spacer(),
+                ElevatedButton.icon(
                   onPressed: _loading ? null : _fetch,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Buscar'),
                 ),
@@ -278,7 +381,8 @@ class _HomePageState extends State<HomePage> {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                const Text('Usuários', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(_users.isEmpty ? "Usuários" : "Usuários (${_users.length})",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ..._users.map((u) => Card(
                       child: ListTile(
@@ -292,7 +396,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     )),
                 const SizedBox(height: 16),
-                const Text('Carrinhos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(_carts.isEmpty ? "Carrinhos" : "Carrinhos (${_carts.length})",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ..._carts.map((c) => Card(
                       child: ListTile(
